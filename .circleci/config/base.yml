@@ -275,6 +275,7 @@ step-depot-tools-get: &step-depot-tools-get
       EOF
         git apply --3way gclient.diff
       fi
+      git revert 30c1cba02fa10a5d23077e9e037dbcf9c177dc3d --no-edit
       # Ensure depot_tools does not update.
       test -d depot_tools && cd depot_tools
       touch .disable_auto_update
