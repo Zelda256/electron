@@ -249,7 +249,7 @@ step-depot-tools-get: &step-depot-tools-get
   run:
     name: Get depot tools
     command: |
-      git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
+      git clone --depth=20 https://chromium.googlesource.com/chromium/tools/depot_tools.git
       if [ "`uname`" == "Darwin" ]; then
         # remove ninjalog_uploader_wrapper.py from autoninja since we don't use it and it causes problems
         sed -i '' '/ninjalog_uploader_wrapper.py/d' ./depot_tools/autoninja
