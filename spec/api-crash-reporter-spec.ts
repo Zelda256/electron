@@ -1,15 +1,17 @@
-import { expect } from 'chai';
-import * as childProcess from 'node:child_process';
-import * as http from 'node:http';
-import * as Busboy from 'busboy';
-import * as path from 'node:path';
-import { ifdescribe, ifit, defer, startRemoteControlApp, repeatedly, listen } from './lib/spec-helpers';
 import { app } from 'electron/main';
-import { crashReporter } from 'electron/common';
+
+import * as Busboy from 'busboy';
+import { expect } from 'chai';
+import * as uuid from 'uuid';
+
+import * as childProcess from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
-import * as uuid from 'uuid';
+import * as http from 'node:http';
+import * as path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
+
+import { ifdescribe, ifit, defer, startRemoteControlApp, repeatedly, listen } from './lib/spec-helpers';
 
 const isWindowsOnArm = process.platform === 'win32' && process.arch === 'arm64';
 const isLinuxOnArm = process.platform === 'linux' && process.arch.includes('arm');
@@ -181,7 +183,7 @@ ifdescribe(!isLinuxOnArm && !process.mas && !process.env.DISABLE_CRASH_REPORTER_
     });
 
     // Ensures that passing in crashpadHandlerPID flag for Linx child processes
-    // does not affect child proocess args.
+    // does not affect child process args.
     ifit(process.platform === 'linux')('ensure linux child process args are not modified', async () => {
       const { port, waitForCrash } = await startServer();
       let exitCode: number | null = null;
@@ -531,7 +533,8 @@ ifdescribe(!isLinuxOnArm && !process.mas && !process.env.DISABLE_CRASH_REPORTER_
       }
     }
 
-    const processList = process.platform === 'linux' ? ['main', 'renderer', 'sandboxed-renderer']
+    const processList = process.platform === 'linux'
+      ? ['main', 'renderer', 'sandboxed-renderer']
       : ['main', 'renderer', 'sandboxed-renderer', 'node'];
     for (const crashingProcess of processList) {
       describe(`when ${crashingProcess} crashes`, () => {
@@ -583,16 +586,20 @@ ifdescribe(!isLinuxOnArm && !process.mas && !process.env.DISABLE_CRASH_REPORTER_
   });
 
   describe('start() option validation', () => {
-    it('requires that the submitURL option be specified', () => {
-      expect(() => {
+    it('requires that the submitURL option be specified', async () => {
+      const { remotely } = await startRemoteControlApp();
+      await expect(remotely(() => {
+        const { crashReporter } = require('electron');
         crashReporter.start({} as any);
-      }).to.throw('submitURL must be specified when uploadToServer is true');
+      })).to.be.rejectedWith('submitURL must be specified when uploadToServer is true');
     });
 
-    it('allows the submitURL option to be omitted when uploadToServer is false', () => {
-      expect(() => {
+    it('allows the submitURL option to be omitted when uploadToServer is false', async () => {
+      const { remotely } = await startRemoteControlApp();
+      await expect(remotely(() => {
+        const { crashReporter } = require('electron');
         crashReporter.start({ uploadToServer: false } as any);
-      }).not.to.throw();
+      })).to.be.fulfilled();
     });
 
     it('can be called twice', async () => {

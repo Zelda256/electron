@@ -7,7 +7,7 @@ Process: [Main](../glossary.md#main-process)
 This module cannot be used until the `ready` event of the `app`
 module is emitted.
 
-```javascript
+```js
 // In the main process.
 const { BrowserWindow } = require('electron')
 
@@ -38,7 +38,7 @@ While loading the page, the `ready-to-show` event will be emitted when the rende
 process has rendered the page for the first time if the window has not been shown yet. Showing
 the window after this event will have no visual flash:
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 const win = new BrowserWindow({ show: false })
 win.once('ready-to-show', () => {
@@ -59,7 +59,7 @@ For a complex app, the `ready-to-show` event could be emitted too late, making
 the app feel slow. In this case, it is recommended to show the window
 immediately, and use a `backgroundColor` close to your app's background:
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 
 const win = new BrowserWindow({ backgroundColor: '#2e2c29' })
@@ -85,7 +85,7 @@ For more information about these color types see valid options in [win.setBackgr
 
 By using `parent` option, you can create child windows:
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 
 const top = new BrowserWindow()
@@ -98,10 +98,10 @@ The `child` window will always show on top of the `top` window.
 
 ## Modal windows
 
-A modal window is a child window that disables parent window, to create a modal
-window, you have to set both `parent` and `modal` options:
+A modal window is a child window that disables parent window. To create a modal
+window, you have to set both the `parent` and `modal` options:
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 
 const top = new BrowserWindow()
@@ -140,7 +140,7 @@ state is `hidden` in order to minimize power consumption.
 * On Linux the type of modal windows will be changed to `dialog`.
 * On Linux many desktop environments do not support hiding a modal window.
 
-## Class: BrowserWindow
+## Class: BrowserWindow extends `BaseWindow`
 
 > Create and control browser windows.
 
@@ -188,7 +188,7 @@ window should be closed, which will also be called when the window is
 reloaded. In Electron, returning any value other than `undefined` would cancel the
 close. For example:
 
-```javascript
+```js
 window.onbeforeunload = (e) => {
   console.log('I do not want to be closed')
 
@@ -207,10 +207,24 @@ _**Note**: There is a subtle difference between the behaviors of `window.onbefor
 Emitted when the window is closed. After you have received this event you should
 remove the reference to the window and avoid using it any more.
 
+#### Event: 'query-session-end' _Windows_
+
+Returns:
+
+* `event` [WindowSessionEndEvent][window-session-end-event]
+
+Emitted when a session is about to end due to a shutdown, machine restart, or user log-off.
+Calling `event.preventDefault()` can delay the system shutdown, though it’s generally best
+to respect the user’s choice to end the session. However, you may choose to use it if
+ending the session puts the user at risk of losing data.
+
 #### Event: 'session-end' _Windows_
 
-Emitted when window session is going to end due to force shutdown or machine restart
-or session log off.
+Returns:
+
+* `event` [WindowSessionEndEvent][window-session-end-event]
+
+Emitted when a session is about to end due to a shutdown, machine restart, or user log-off. Once this event fires, there is no way to prevent the session from ending.
 
 #### Event: 'unresponsive'
 
@@ -351,7 +365,7 @@ Commands are lowercased, underscores are replaced with hyphens, and the
 `APPCOMMAND_` prefix is stripped off.
 e.g. `APPCOMMAND_BROWSER_BACKWARD` is emitted as `browser-backward`.
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 const win = new BrowserWindow()
 win.on('app-command', (e, cmd) => {
@@ -440,9 +454,13 @@ Returns `BrowserWindow | null` - The window that is focused in this application,
 Returns `BrowserWindow | null` - The window that owns the given `webContents`
 or `null` if the contents are not owned by a window.
 
-#### `BrowserWindow.fromBrowserView(browserView)`
+#### `BrowserWindow.fromBrowserView(browserView)` _Deprecated_
 
 * `browserView` [BrowserView](browser-view.md)
+
+> **Note**
+> The `BrowserView` class is deprecated, and replaced by the new
+> [`WebContentsView`](web-contents-view.md) class.
 
 Returns `BrowserWindow | null` - The window that owns the given `browserView`. If the given view is not attached to any window, returns `null`.
 
@@ -456,7 +474,7 @@ Returns `BrowserWindow | null` - The window with the given `id`.
 
 Objects created with `new BrowserWindow` have the following properties:
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 // In this example `win` is our instance
 const win = new BrowserWindow({ width: 800, height: 600 })
@@ -474,6 +492,10 @@ events.
 #### `win.id` _Readonly_
 
 A `Integer` property representing the unique ID of the window. Each ID is unique among all `BrowserWindow` instances of the entire Electron application.
+
+#### `win.tabbingIdentifier` _macOS_ _Readonly_
+
+A `string` (optional) property that is equal to the `tabbingIdentifier` passed to the `BrowserWindow` constructor or `undefined` if none was set.
 
 #### `win.autoHideMenuBar`
 
@@ -682,6 +704,8 @@ Sets whether the window should be in fullscreen mode.
 
 Returns `boolean` - Whether the window is in fullscreen mode.
 
+**Note:** On macOS, fullscreen transitions take place asynchronously. When querying for a BrowserWindow's fullscreen status, you should ensure that either the ['enter-full-screen'](browser-window.md#event-enter-full-screen) or ['leave-full-screen'](browser-window.md#event-leave-full-screen) events have been emitted.
+
 #### `win.setSimpleFullScreen(flag)` _macOS_
 
 * `flag` boolean
@@ -715,7 +739,7 @@ Perhaps there are 15 pixels of controls on the left edge, 25 pixels of controls
 on the right edge and 50 pixels of controls below the player. In order to
 maintain a 16:9 aspect ratio (standard aspect ratio for HD @1920x1080) within
 the player itself we would call this function with arguments of 16/9 and
-{ width: 40, height: 50 }. The second argument doesn't care where the extra width and height
+\{ width: 40, height: 50 \}. The second argument doesn't care where the extra width and height
 are within the content view--only that they exist. Sum any extra width and
 height areas you have within the overall content view.
 
@@ -736,16 +760,16 @@ Examples of valid `backgroundColor` values:
   * #ffffff (RGB)
   * #ffffffff (ARGB)
 * RGB
-  * rgb\((\[\d]+),\s*(\[\d]+),\s*(\[\d]+)\)
+  * `rgb\(([\d]+),\s*([\d]+),\s*([\d]+)\)`
     * e.g. rgb(255, 255, 255)
 * RGBA
-  * rgba\((\[\d]+),\s*(\[\d]+),\s*(\[\d]+),\s*(\[\d.]+)\)
+  * `rgba\(([\d]+),\s*([\d]+),\s*([\d]+),\s*([\d.]+)\)`
     * e.g. rgba(255, 255, 255, 1.0)
 * HSL
-  * hsl\((-?\[\d.]+),\s*(\[\d.]+)%,\s*(\[\d.]+)%\)
+  * `hsl\((-?[\d.]+),\s*([\d.]+)%,\s*([\d.]+)%\)`
     * e.g. hsl(200, 20%, 50%)
 * HSLA
-  * hsla\((-?\[\d.]+),\s*(\[\d.]+)%,\s*(\[\d.]+)%,\s*(\[\d.]+)\)
+  * `hsla\((-?[\d.]+),\s*([\d.]+)%,\s*([\d.]+)%,\s*([\d.]+)\)`
     * e.g. hsla(200, 20%, 50%, 0.5)
 * Color name
   * Options are listed in [SkParseColor.cpp](https://source.chromium.org/chromium/chromium/src/+/main:third_party/skia/src/utils/SkParseColor.cpp;l=11-152;drc=eea4bf52cb0d55e2a39c828b017c80a5ee054148)
@@ -771,12 +795,12 @@ Closes the currently open [Quick Look][quick-look] panel.
 
 #### `win.setBounds(bounds[, animate])`
 
-* `bounds` Partial<[Rectangle](structures/rectangle.md)>
+* `bounds` Partial\<[Rectangle](structures/rectangle.md)\>
 * `animate` boolean (optional) _macOS_
 
 Resizes and moves the window to the supplied bounds. Any properties that are not supplied will default to their current values.
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 const win = new BrowserWindow()
 
@@ -1031,7 +1055,7 @@ Changes the attachment point for sheets on macOS. By default, sheets are
 attached just below the window frame, but you may want to display them beneath
 a HTML-rendered toolbar. For example:
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 const win = new BrowserWindow()
 
@@ -1040,6 +1064,15 @@ win.setSheetOffset(toolbarRect.height)
 ```
 
 #### `win.flashFrame(flag)`
+
+<!--
+```YAML history
+changes:
+  - pr-url: https://github.com/electron/electron/pull/41391
+    description: "`window.flashFrame(bool)` will flash dock icon continuously on macOS"
+    breaking-changes-header: behavior-changed-windowflashframebool-will-flash-dock-icon-continuously-on-macos
+```
+-->
 
 * `flag` boolean
 
@@ -1174,7 +1207,7 @@ To ensure that file URLs are properly formatted, it is recommended to use
 Node's [`url.format`](https://nodejs.org/api/url.html#url_url_format_urlobject)
 method:
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 const win = new BrowserWindow()
 
@@ -1190,7 +1223,7 @@ win.loadURL(url)
 You can load a URL using a `POST` request with URL-encoded data by doing
 the following:
 
-```javascript
+```js
 const { BrowserWindow } = require('electron')
 const win = new BrowserWindow()
 
@@ -1207,7 +1240,7 @@ win.loadURL('http://localhost:8000/post', {
 
 * `filePath` string
 * `options` Object (optional)
-  * `query` Record<string, string> (optional) - Passed to `url.format()`.
+  * `query` Record\<string, string\> (optional) - Passed to `url.format()`.
   * `search` string (optional) - Passed to `url.format()`.
   * `hash` string (optional) - Passed to `url.format()`.
 
@@ -1530,13 +1563,17 @@ there is only one tab in the current window.
 
 Adds a window as a tab on this window, after the tab for the window instance.
 
-#### `win.setVibrancy(type)` _macOS_
+#### `win.setVibrancy(type[, options])` _macOS_
 
 * `type` string | null - Can be `titlebar`, `selection`, `menu`, `popover`, `sidebar`, `header`, `sheet`, `window`, `hud`, `fullscreen-ui`, `tooltip`, `content`, `under-window`, or `under-page`. See
   the [macOS documentation][vibrancy-docs] for more details.
+* `options` Object (optional)
+  * `animationDuration` number (optional) - if greater than zero, the change to vibrancy will be animated over the given duration (in milliseconds).
 
 Adds a vibrancy effect to the browser window. Passing `null` or an empty string
-will remove the vibrancy effect on the window.
+will remove the vibrancy effect on the window. The `animationDuration` parameter only
+ animates fading in or fading out the vibrancy effect. Animating between
+ different types of vibrancy is not supported.
 
 #### `win.setBackgroundMaterial(material)` _Windows_
 
@@ -1576,54 +1613,77 @@ machine has a touch bar.
 **Note:** The TouchBar API is currently experimental and may change or be
 removed in future Electron releases.
 
-#### `win.setBrowserView(browserView)` _Experimental_
+#### `win.setBrowserView(browserView)` _Experimental_ _Deprecated_
 
 * `browserView` [BrowserView](browser-view.md) | null - Attach `browserView` to `win`.
 If there are other `BrowserView`s attached, they will be removed from
 this window.
 
-#### `win.getBrowserView()` _Experimental_
+> **Note**
+> The `BrowserView` class is deprecated, and replaced by the new
+> [`WebContentsView`](web-contents-view.md) class.
+
+#### `win.getBrowserView()` _Experimental_ _Deprecated_
 
 Returns `BrowserView | null` - The `BrowserView` attached to `win`. Returns `null`
 if one is not attached. Throws an error if multiple `BrowserView`s are attached.
 
-#### `win.addBrowserView(browserView)` _Experimental_
+> **Note**
+> The `BrowserView` class is deprecated, and replaced by the new
+> [`WebContentsView`](web-contents-view.md) class.
+
+#### `win.addBrowserView(browserView)` _Experimental_ _Deprecated_
 
 * `browserView` [BrowserView](browser-view.md)
 
 Replacement API for setBrowserView supporting work with multi browser views.
 
-#### `win.removeBrowserView(browserView)` _Experimental_
+> **Note**
+> The `BrowserView` class is deprecated, and replaced by the new
+> [`WebContentsView`](web-contents-view.md) class.
+
+#### `win.removeBrowserView(browserView)` _Experimental_ _Deprecated_
 
 * `browserView` [BrowserView](browser-view.md)
 
-#### `win.setTopBrowserView(browserView)` _Experimental_
+> **Note**
+> The `BrowserView` class is deprecated, and replaced by the new
+> [`WebContentsView`](web-contents-view.md) class.
+
+#### `win.setTopBrowserView(browserView)` _Experimental_ _Deprecated_
 
 * `browserView` [BrowserView](browser-view.md)
 
 Raises `browserView` above other `BrowserView`s attached to `win`.
 Throws an error if `browserView` is not attached to `win`.
 
-#### `win.getBrowserViews()` _Experimental_
+> **Note**
+> The `BrowserView` class is deprecated, and replaced by the new
+> [`WebContentsView`](web-contents-view.md) class.
+
+#### `win.getBrowserViews()` _Experimental_ _Deprecated_
 
 Returns `BrowserView[]` - a sorted by z-index array of all BrowserViews that have been attached
 with `addBrowserView` or `setBrowserView`. The top-most BrowserView is the last element of the array.
 
-**Note:** The BrowserView API is currently experimental and may change or be
-removed in future Electron releases.
+> **Note**
+> The `BrowserView` class is deprecated, and replaced by the new
+> [`WebContentsView`](web-contents-view.md) class.
 
-#### `win.setTitleBarOverlay(options)` _Windows_
+#### `win.setTitleBarOverlay(options)` _Windows_ _Linux_
 
 * `options` Object
-  * `color` String (optional) _Windows_ - The CSS color of the Window Controls Overlay when enabled.
-  * `symbolColor` String (optional) _Windows_ - The CSS color of the symbols on the Window Controls Overlay when enabled.
-  * `height` Integer (optional) _macOS_ _Windows_ - The height of the title bar and Window Controls Overlay in pixels.
+  * `color` String (optional) - The CSS color of the Window Controls Overlay when enabled.
+  * `symbolColor` String (optional) - The CSS color of the symbols on the Window Controls Overlay when enabled.
+  * `height` Integer (optional) - The height of the title bar and Window Controls Overlay in pixels.
 
-On a Window with Window Controls Overlay already enabled, this method updates
-the style of the title bar overlay.
+On a window with Window Controls Overlay already enabled, this method updates the style of the title bar overlay.
+
+On Linux, the `symbolColor` is automatically calculated to have minimum accessible contrast to the `color` if not explicitly set.
 
 [page-visibility-api]: https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API
 [quick-look]: https://en.wikipedia.org/wiki/Quick_Look
 [vibrancy-docs]: https://developer.apple.com/documentation/appkit/nsvisualeffectview?preferredLanguage=objc
 [window-levels]: https://developer.apple.com/documentation/appkit/nswindow/level
 [event-emitter]: https://nodejs.org/api/events.html#events_class_eventemitter
+[window-session-end-event]:../api/structures/window-session-end-event.md

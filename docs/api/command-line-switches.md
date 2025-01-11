@@ -6,7 +6,7 @@ You can use [app.commandLine.appendSwitch][append-switch] to append them in
 your app's main script before the [ready][ready] event of the [app][app] module
 is emitted:
 
-```javascript
+```js
 const { app } = require('electron')
 app.commandLine.appendSwitch('remote-debugging-port', '8315')
 app.commandLine.appendSwitch('host-rules', 'MAP * 127.0.0.1')
@@ -38,7 +38,7 @@ Without `*` prefix the URL has to match exactly.
 
 ### --disable-ntlm-v2
 
-Disables NTLM v2 for posix platforms, no effect elsewhere.
+Disables NTLM v2 for POSIX platforms, no effect elsewhere.
 
 ### --disable-http-cache
 
@@ -185,7 +185,7 @@ list of hosts. This flag has an effect only if used in tandem with
 
 For example:
 
-```javascript
+```js
 const { app } = require('electron')
 app.commandLine.appendSwitch('proxy-bypass-list', '<local>;*.google.com;*foo.com;1.2.3.4:5678')
 ```
@@ -241,6 +241,13 @@ Force using discrete GPU when there are multiple GPUs available.
 
 Force using integrated GPU when there are multiple GPUs available.
 
+### --xdg-portal-required-version=`version`
+
+Sets the minimum required version of XDG portal implementation to `version`
+in order to use the portal backend for file dialogs on linux. File dialogs
+will fallback to using gtk or kde depending on the desktop environment when
+the required version is unavailable. Current default is set to `3`.
+
 ## Node.js Flags
 
 Electron supports some of the [CLI flags][node-cli] supported by Node.js.
@@ -279,7 +286,7 @@ Aliased to `--debug[=[host:]port`.
 
 Specify ways of the inspector web socket url exposure.
 
-By default inspector websocket url is available in stderr and under /json/list endpoint on http://host:port/json/list.
+By default inspector websocket url is available in stderr and under /json/list endpoint on `http://host:port/json/list`.
 
 ### `--no-deprecation`
 

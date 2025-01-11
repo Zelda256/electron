@@ -7,7 +7,7 @@ This allows embedders to call SetDefersLoading without reaching into Blink inter
 This might be upstreamable?
 
 diff --git a/third_party/blink/public/web/web_document_loader.h b/third_party/blink/public/web/web_document_loader.h
-index ff1948e649fffdc92a2db0e736c99bf4e8c06514..b165201b273c8fa9de8e66fe8ef7bfc28eee0850 100644
+index 23b29fe25bc463ff1d36aa502a27c4222595e7c5..c1ac6172c4cee72f64f42ca64d2db9c0f1f48738 100644
 --- a/third_party/blink/public/web/web_document_loader.h
 +++ b/third_party/blink/public/web/web_document_loader.h
 @@ -38,6 +38,7 @@
@@ -18,8 +18,8 @@ index ff1948e649fffdc92a2db0e736c99bf4e8c06514..b165201b273c8fa9de8e66fe8ef7bfc2
  #include "third_party/blink/public/platform/web_source_location.h"
  #include "third_party/blink/public/web/web_navigation_type.h"
  
-@@ -62,6 +63,8 @@ class BLINK_EXPORT WebDocumentLoader {
-     virtual ~ExtraData() = default;
+@@ -63,6 +64,8 @@ class BLINK_EXPORT WebDocumentLoader {
+     virtual std::unique_ptr<ExtraData> Clone() = 0;
    };
  
 +  virtual void SetDefersLoading(WebLoaderFreezeMode) = 0;
@@ -28,11 +28,11 @@ index ff1948e649fffdc92a2db0e736c99bf4e8c06514..b165201b273c8fa9de8e66fe8ef7bfc2
  
    // Returns the http referrer of original request which initited this load.
 diff --git a/third_party/blink/renderer/core/loader/document_loader.h b/third_party/blink/renderer/core/loader/document_loader.h
-index 8328adb3dfcdea728bb845355cb548059a0d5a4f..242530b7a53e4836315283ad4c9079ad7f7b24a1 100644
+index 845b0cc7a208374a14e76e1e92f783636a1288c9..33d7a584b2f71f480325be6e96d3465104d3815f 100644
 --- a/third_party/blink/renderer/core/loader/document_loader.h
 +++ b/third_party/blink/renderer/core/loader/document_loader.h
-@@ -304,7 +304,7 @@ class CORE_EXPORT DocumentLoader : public GarbageCollected<DocumentLoader>,
-       absl::optional<scheduler::TaskAttributionId>
+@@ -327,7 +327,7 @@ class CORE_EXPORT DocumentLoader : public GarbageCollected<DocumentLoader>,
+       std::optional<scheduler::TaskAttributionId>
            soft_navigation_heuristics_task_id);
  
 -  void SetDefersLoading(LoaderFreezeMode);

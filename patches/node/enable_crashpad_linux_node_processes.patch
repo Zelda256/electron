@@ -8,7 +8,7 @@ to child processes spawned with `ELECTRON_RUN_AS_NODE` which is used
 by the crashpad client to connect with the handler process.
 
 diff --git a/lib/child_process.js b/lib/child_process.js
-index ec39a00ddb791e6e1ebe31aa45d290e7dcc4ebfc..1cd5d8969471b276211c45a9d8d76e9b10b1bb66 100644
+index 580a441a803bdd0b57871c0cdd8af576f11609b1..755712d24219de7ffe491957d941df7c8cf7baad 100644
 --- a/lib/child_process.js
 +++ b/lib/child_process.js
 @@ -61,6 +61,7 @@ let debug = require('internal/util/debuglog').debuglog(
@@ -19,7 +19,7 @@ index ec39a00ddb791e6e1ebe31aa45d290e7dcc4ebfc..1cd5d8969471b276211c45a9d8d76e9b
  
  const {
    AbortError,
-@@ -162,7 +163,6 @@ function fork(modulePath, args = [], options) {
+@@ -153,7 +154,6 @@ function fork(modulePath, args = [], options) {
        ArrayPrototypeSplice(execArgv, index - 1, 2);
      }
    }
@@ -27,25 +27,34 @@ index ec39a00ddb791e6e1ebe31aa45d290e7dcc4ebfc..1cd5d8969471b276211c45a9d8d76e9b
    args = [...execArgv, modulePath, ...args];
  
    if (typeof options.stdio === 'string') {
-@@ -625,6 +625,21 @@ function normalizeSpawnArguments(file, args, options) {
+@@ -617,6 +617,22 @@ function normalizeSpawnArguments(file, args, options) {
                      'options.windowsVerbatimArguments');
    }
  
-+  if (process.platform === 'linux') {
-+    if (ObjectPrototypeHasOwnProperty(options.env || process.env, 'ELECTRON_RUN_AS_NODE') &&
-+        (file === process.execPath)) {
-+      // On Linux, pass the file descriptor which crashpad handler process
-+      // uses to monitor the child process and PID of the handler process.
-+      // https://source.chromium.org/chromium/chromium/src/+/110.0.5415.0:components/crash/core/app/crashpad_linux.cc;l=199-206
-+      const fd = getCrashdumpSignalFD();
-+      const pid = getCrashpadHandlerPID();
-+      if (fd !== -1 && pid !== -1) {
-+        options.env.CRASHDUMP_SIGNAL_FD = fd;
-+        options.env.CRASHPAD_HANDLER_PID = pid;
-+      }
++  const env = options.env || process.env;
++
++  if ((process.platform === 'linux') &&
++      ObjectPrototypeHasOwnProperty(env, 'ELECTRON_RUN_AS_NODE') &&
++      (file === process.execPath)) {
++    // On Linux, pass the file descriptor which crashpad handler process
++    // uses to monitor the child process and PID of the handler process.
++    // https://source.chromium.org/chromium/chromium/src/+/110.0.5415.0:components/crash/core/app/crashpad_linux.cc;l=199-206
++    const fd = getCrashdumpSignalFD();
++    const pid = getCrashpadHandlerPID();
++    if (fd !== -1 && pid !== -1) {
++      env.CRASHDUMP_SIGNAL_FD = fd;
++      env.CRASHPAD_HANDLER_PID = pid;
 +    }
 +  }
 +
    if (options.shell) {
      validateArgumentNullCheck(options.shell, 'options.shell');
      const command = ArrayPrototypeJoin([file, ...args], ' ');
+@@ -650,7 +666,6 @@ function normalizeSpawnArguments(file, args, options) {
+     ArrayPrototypeUnshift(args, file);
+   }
+ 
+-  const env = options.env || process.env;
+   const envPairs = [];
+ 
+   // process.env.NODE_V8_COVERAGE always propagates, making it possible to

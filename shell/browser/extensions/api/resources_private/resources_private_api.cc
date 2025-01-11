@@ -14,7 +14,6 @@
 #include "components/strings/grit/components_strings.h"
 #include "components/zoom/page_zoom_constants.h"
 #include "electron/buildflags/buildflags.h"
-#include "printing/buildflags/buildflags.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/webui/web_ui_util.h"
 
@@ -40,26 +39,24 @@ ResourcesPrivateGetStringsFunction::~ResourcesPrivateGetStringsFunction() =
     default;
 
 ExtensionFunction::ResponseAction ResourcesPrivateGetStringsFunction::Run() {
-  absl::optional<get_strings::Params> params(
+  std::optional<get_strings::Params> params(
       get_strings::Params::Create(args()));
   base::Value::Dict dict;
 
   api::resources_private::Component component = params->component;
 
   switch (component) {
-    case api::resources_private::COMPONENT_PDF:
+    case api::resources_private::Component::kPdf:
 #if BUILDFLAG(ENABLE_PDF_VIEWER)
       pdf_extension_util::AddStrings(
           pdf_extension_util::PdfViewerContext::kPdfViewer, &dict);
       pdf_extension_util::AddAdditionalData(true, false, &dict);
 #endif
       break;
-    case api::resources_private::COMPONENT_IDENTITY:
+    case api::resources_private::Component::kIdentity:
       NOTREACHED();
-      break;
-    case api::resources_private::COMPONENT_NONE:
+    case api::resources_private::Component::kNone:
       NOTREACHED();
-      break;
   }
 
   const std::string& app_locale = g_browser_process->GetApplicationLocale();

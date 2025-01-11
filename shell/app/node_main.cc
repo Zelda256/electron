@@ -7,39 +7,45 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/containers/fixed_flat_set.h"
+#include "base/environment.h"
 #include "base/feature_list.h"
-#include "base/strings/string_util.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "content/public/common/content_switches.h"
-#include "electron/electron_version.h"
+#include "electron/fuses.h"
+#include "electron/mas.h"
 #include "gin/array_buffer.h"
 #include "gin/public/isolate_holder.h"
 #include "gin/v8_initializer.h"
 #include "shell/app/uv_task_runner.h"
 #include "shell/browser/javascript_environment.h"
 #include "shell/common/api/electron_bindings.h"
+#include "shell/common/electron_command_line.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/node_bindings.h"
 #include "shell/common/node_includes.h"
+#include "shell/common/node_util.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "chrome/child/v8_crashpad_support_win.h"
 #endif
 
 #if BUILDFLAG(IS_LINUX)
-#include "base/environment.h"
 #include "base/posix/global_descriptors.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/crash/core/app/crash_switches.h"  // nogncheck
 #include "content/public/common/content_descriptors.h"
+#endif
+
+#if BUILDFLAG(IS_MAC)
+#include "shell/common/mac/codesign_util.h"
 #endif
 
 #if !IS_MAS_BUILD()
@@ -54,17 +60,16 @@ namespace {
 // See https://nodejs.org/api/cli.html#cli_options
 void ExitIfContainsDisallowedFlags(const std::vector<std::string>& argv) {
   // Options that are unilaterally disallowed.
-  static constexpr auto disallowed =
-      base::MakeFixedFlatSetSorted<base::StringPiece>({
-          "--enable-fips",
-          "--force-fips",
-          "--openssl-config",
-          "--use-bundled-ca",
-          "--use-openssl-ca",
-      });
+  static constexpr auto disallowed = base::MakeFixedFlatSet<std::string_view>({
+      "--enable-fips",
+      "--force-fips",
+      "--openssl-config",
+      "--use-bundled-ca",
+      "--use-openssl-ca",
+  });
 
   for (const auto& arg : argv) {
-    const auto key = base::StringPiece(arg).substr(0, arg.find('='));
+    const auto key = std::string_view{arg}.substr(0, arg.find('='));
     if (disallowed.contains(key)) {
       LOG(ERROR) << "The Node.js cli flag " << key
                  << " is not supported in Electron";
@@ -77,14 +82,27 @@ void ExitIfContainsDisallowedFlags(const std::vector<std::string>& argv) {
   }
 }
 
+#if BUILDFLAG(IS_MAC)
+// A list of node envs that may be used to inject scripts.
+const char* kHijackableEnvs[] = {"NODE_OPTIONS", "NODE_REPL_EXTERNAL_MODULE"};
+
+// Return true if there is any env in kHijackableEnvs.
+bool UnsetHijackableEnvs(base::Environment* env) {
+  bool has = false;
+  for (const char* name : kHijackableEnvs) {
+    if (env->HasVar(name)) {
+      env->UnSetVar(name);
+      has = true;
+    }
+  }
+  return has;
+}
+#endif
+
 #if IS_MAS_BUILD()
 void SetCrashKeyStub(const std::string& key, const std::string& value) {}
 void ClearCrashKeyStub(const std::string& key) {}
 #endif
-
-}  // namespace
-
-namespace electron {
 
 v8::Local<v8::Value> GetParameters(v8::Isolate* isolate) {
   std::map<std::string, std::string> keys;
@@ -94,19 +112,44 @@ v8::Local<v8::Value> GetParameters(v8::Isolate* isolate) {
   return gin::ConvertToV8(isolate, keys);
 }
 
-int NodeMain(int argc, char* argv[]) {
-  bool initialized = base::CommandLine::Init(argc, argv);
-  if (!initialized) {
-    LOG(ERROR) << "Failed to initialize CommandLine";
-    exit(1);
+}  // namespace
+
+namespace electron {
+
+int NodeMain() {
+  DCHECK(base::CommandLine::InitializedForCurrentProcess());
+
+  auto os_env = base::Environment::Create();
+  bool node_options_enabled = electron::fuses::IsNodeOptionsEnabled();
+  if (!node_options_enabled) {
+    os_env->UnSetVar("NODE_OPTIONS");
+    os_env->UnSetVar("NODE_EXTRA_CA_CERTS");
   }
+
+#if BUILDFLAG(IS_MAC)
+  if (!ProcessSignatureIsSameWithCurrentApp(getppid())) {
+    // On macOS, it is forbidden to run sandboxed app with custom arguments
+    // from another app, i.e. args are discarded in following call:
+    //   exec("Sandboxed.app", ["--custom-args-will-be-discarded"])
+    // However it is possible to bypass the restriction by abusing the node mode
+    // of Electron apps:
+    //   exec("Electron.app", {env: {ELECTRON_RUN_AS_NODE: "1",
+    //                               NODE_OPTIONS: "--require 'bad.js'"}})
+    // To prevent Electron apps from being used to work around macOS security
+    // restrictions, when the parent process is not part of the app bundle, all
+    // environment variables that may be used to inject scripts are removed.
+    if (UnsetHijackableEnvs(os_env.get())) {
+      LOG(ERROR) << "Node.js environment variables are disabled because this "
+                    "process is invoked by other apps.";
+    }
+  }
+#endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_WIN)
   v8_crashpad_support::SetUp();
 #endif
 
 #if BUILDFLAG(IS_LINUX)
-  auto os_env = base::Environment::Create();
   std::string fd_string, pid_string;
   if (os_env->GetVar("CRASHDUMP_SIGNAL_FD", &fd_string) &&
       os_env->GetVar("CRASHPAD_HANDLER_PID", &pid_string)) {
@@ -130,20 +173,17 @@ int NodeMain(int argc, char* argv[]) {
 
     // Initialize feature list.
     auto feature_list = std::make_unique<base::FeatureList>();
-    feature_list->InitializeFromCommandLine("", "");
+    feature_list->InitFromCommandLine("", "");
     base::FeatureList::SetInstance(std::move(feature_list));
 
     // Explicitly register electron's builtin bindings.
     NodeBindings::RegisterBuiltinBindings();
 
-    // Hack around with the argv pointer. Used for process.title = "blah".
-    argv = uv_setup_args(argc, argv);
-
     // Parse Node.js cli flags and strip out disallowed options.
-    std::vector<std::string> args(argv, argv + argc);
+    const std::vector<std::string> args = ElectronCommandLine::AsUtf8();
     ExitIfContainsDisallowedFlags(args);
 
-    std::unique_ptr<node::InitializationResult> result =
+    std::shared_ptr<node::InitializationResult> result =
         node::InitializeOncePerProcess(
             args,
             {node::ProcessInitializationFlags::kNoInitializeV8,
@@ -235,15 +275,10 @@ int NodeMain(int argc, char* argv[]) {
 #endif
 
       process.Set("crashReporter", reporter);
-
-      gin_helper::Dictionary versions;
-      if (process.Get("versions", &versions)) {
-        versions.SetReadOnly(ELECTRON_PROJECT_NAME, ELECTRON_VERSION_STRING);
-      }
     }
 
     v8::HandleScope scope(isolate);
-    node::LoadEnvironment(env, node::StartExecutionCallback{});
+    node::LoadEnvironment(env, node::StartExecutionCallback{}, &OnNodePreload);
 
     // Potential reasons we get Nothing here may include: the env
     // is stopping, or the user hooks process.emit('exit').

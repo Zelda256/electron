@@ -1,8 +1,9 @@
-import * as events from 'events';
 import { IPC_MESSAGES } from '@electron/internal/common/ipc-messages';
-
-import type * as ipcRendererUtilsModule from '@electron/internal/renderer/ipc-renderer-internal-utils';
 import type * as ipcRendererInternalModule from '@electron/internal/renderer/ipc-renderer-internal';
+import type * as ipcRendererUtilsModule from '@electron/internal/renderer/ipc-renderer-internal-utils';
+
+import * as events from 'events';
+import { setImmediate, clearImmediate } from 'timers';
 
 declare const binding: {
   get: (name: string) => any;
@@ -126,7 +127,6 @@ function runPreloadScript (preloadSrc: string) {
 
   // eval in window scope
   const preloadFn = binding.createPreloadScript(preloadWrapperSrc);
-  const { setImmediate, clearImmediate } = require('timers');
   const exports = {};
 
   preloadFn(preloadRequire, preloadProcess, Buffer, global, setImmediate, clearImmediate, exports, { exports });

@@ -12,8 +12,7 @@
 #include "base/task/current_thread.h"
 #include "base/task/sequenced_task_runner.h"
 #include "content/public/browser/browser_task_traits.h"
-#include "content/public/browser/browser_thread.h"
-#include "content/public/browser/web_contents.h"
+#include "shell/browser/api/electron_api_base_window.h"
 #include "shell/browser/native_window.h"
 #include "shell/common/keyboard_util.h"
 #include "shell/common/node_includes.h"
@@ -25,7 +24,7 @@ static NSMenu* __strong applicationMenu_;
 ui::Accelerator GetAcceleratorFromKeyEquivalentAndModifierMask(
     NSString* key_equivalent,
     NSUInteger modifier_mask) {
-  absl::optional<char16_t> shifted_char;
+  std::optional<char16_t> shifted_char;
   ui::KeyboardCode code = electron::KeyboardCodeFromStr(
       base::SysNSStringToUTF8(key_equivalent), &shifted_char);
   int modifiers = 0;
@@ -52,7 +51,7 @@ void MenuMac::PopupAt(BaseWindow* window,
                       int x,
                       int y,
                       int positioning_item,
-                      ui::MenuSourceType source_type,
+                      ui::mojom::MenuSourceType source_type,
                       base::OnceClosure callback) {
   NativeWindow* native_window = window->window();
   if (!native_window)

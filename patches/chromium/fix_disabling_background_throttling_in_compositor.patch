@@ -12,10 +12,10 @@ invisible state of the `viz::DisplayScheduler` owned
 by the `ui::Compositor`.
 
 diff --git a/ui/compositor/compositor.cc b/ui/compositor/compositor.cc
-index 623991465edb99ee720c8177c3511e4d025ed890..c94537af56f7de8cd15bd3b3155b79b41ea003f4 100644
+index b505f127b2e05e347f0bc55a8e6c2e07e645fa3e..41ca5c47b656b521f8d9cbf1e5fe7bc90f3e18e9 100644
 --- a/ui/compositor/compositor.cc
 +++ b/ui/compositor/compositor.cc
-@@ -341,7 +341,8 @@ void Compositor::SetLayerTreeFrameSink(
+@@ -340,7 +340,8 @@ void Compositor::SetLayerTreeFrameSink(
    if (display_private_) {
      disabled_swap_until_resize_ = false;
      display_private_->Resize(size());
@@ -25,22 +25,19 @@ index 623991465edb99ee720c8177c3511e4d025ed890..c94537af56f7de8cd15bd3b3155b79b4
      display_private_->SetDisplayColorSpaces(display_color_spaces_);
      display_private_->SetDisplayColorMatrix(
          gfx::SkM44ToTransform(display_color_matrix_));
-@@ -533,8 +534,11 @@ void Compositor::SetVisible(bool visible) {
-   host_->SetVisible(visible);
-   // Visibility is reset when the output surface is lost, so this must also be
-   // updated then.
--  if (display_private_)
+@@ -551,7 +552,9 @@ void Compositor::SetVisible(bool visible) {
+   // updated then. We need to call this even if the visibility hasn't changed,
+   // for the same reason.
+   if (display_private_)
 -    display_private_->SetDisplayVisible(visible);
-+  if (display_private_) {
 +    // Invisible display is throttling itself.
 +    display_private_->SetDisplayVisible(
 +        background_throttling_ ? visible : true);
-+  }
- }
  
- bool Compositor::IsVisible() {
-@@ -959,4 +963,13 @@ const cc::LayerTreeSettings& Compositor::GetLayerTreeSettings() const {
-   return host_->GetSettings();
+   if (changed) {
+     observer_list_.Notify(&CompositorObserver::OnCompositorVisibilityChanged,
+@@ -1004,6 +1007,15 @@ void Compositor::MaybeUpdateObserveBeginFrame() {
+       host_begin_frame_observer_->GetBoundRemote());
  }
  
 +void Compositor::SetBackgroundThrottling(bool background_throttling_enabled) {
@@ -52,12 +49,14 @@ index 623991465edb99ee720c8177c3511e4d025ed890..c94537af56f7de8cd15bd3b3155b79b4
 +  }
 +}
 +
- }  // namespace ui
+ #if BUILDFLAG(IS_CHROMEOS)
+ void Compositor::SetSeamlessRefreshRates(
+     const std::vector<float>& seamless_refresh_rates) {
 diff --git a/ui/compositor/compositor.h b/ui/compositor/compositor.h
-index ddb28fd6f7549759df7e3b7d6b309cd982e199af..7473f3af9bc8cac8db3c30dfbc9b7140f832ac15 100644
+index 970768eaa311139d0b27f5be893d601e20052825..cc5c2a704e339713a796196805a2aa05206d5b2e 100644
 --- a/ui/compositor/compositor.h
 +++ b/ui/compositor/compositor.h
-@@ -511,6 +511,10 @@ class COMPOSITOR_EXPORT Compositor : public base::PowerSuspendObserver,
+@@ -509,6 +509,10 @@ class COMPOSITOR_EXPORT Compositor : public base::PowerSuspendObserver,
  
    const cc::LayerTreeSettings& GetLayerTreeSettings() const;
  
@@ -65,10 +64,10 @@ index ddb28fd6f7549759df7e3b7d6b309cd982e199af..7473f3af9bc8cac8db3c30dfbc9b7140
 +  // and switching frames.
 +  void SetBackgroundThrottling(bool background_throttling_enabled);
 +
-  private:
-   friend class base::RefCounted<Compositor>;
-   friend class TotalAnimationThroughputReporter;
-@@ -617,6 +621,12 @@ class COMPOSITOR_EXPORT Compositor : public base::PowerSuspendObserver,
+   size_t saved_events_metrics_count_for_testing() const {
+     return host_->saved_events_metrics_count_for_testing();
+   }
+@@ -657,6 +661,12 @@ class COMPOSITOR_EXPORT Compositor : public base::PowerSuspendObserver,
    // See go/report-ux-metrics-at-painting for details.
    bool animation_started_ = false;
  
@@ -78,6 +77,6 @@ index ddb28fd6f7549759df7e3b7d6b309cd982e199af..7473f3af9bc8cac8db3c30dfbc9b7140
 +  // visible in order to keep generating frames.
 +  bool background_throttling_ = true;
 +
-   TrackerId next_throughput_tracker_id_ = 1u;
+   TrackerId next_compositor_metrics_tracker_id_ = 1u;
    struct TrackerState {
      TrackerState();

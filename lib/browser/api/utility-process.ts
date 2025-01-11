@@ -1,10 +1,12 @@
-import { EventEmitter } from 'events';
-import { Duplex, PassThrough } from 'stream';
-import { Socket } from 'net';
 import { MessagePortMain } from '@electron/internal/browser/message-port-main';
+
+import { EventEmitter } from 'events';
+import { Socket } from 'net';
+import { Duplex, PassThrough } from 'stream';
+
 const { _fork } = process._linkedBinding('electron_browser_utility_process');
 
-class ForkUtilityProcess extends EventEmitter {
+class ForkUtilityProcess extends EventEmitter implements Electron.UtilityProcess {
   #handle: ElectronInternal.UtilityProcessWrapper | null;
   #stdout: Duplex | null = null;
   #stderr: Duplex | null = null;

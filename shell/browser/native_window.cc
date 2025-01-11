@@ -16,6 +16,7 @@
 #include "include/core/SkColor.h"
 #include "shell/browser/background_throttling_source.h"
 #include "shell/browser/browser.h"
+#include "shell/browser/draggable_region_provider.h"
 #include "shell/browser/native_window_features.h"
 #include "shell/browser/ui/drag_util.h"
 #include "shell/browser/window_list.h"
@@ -23,7 +24,6 @@
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/gin_helper/persistent_dictionary.h"
 #include "shell/common/options_switches.h"
-#include "third_party/skia/include/core/SkRegion.h"
 #include "ui/base/hit_test.h"
 #include "ui/compositor/compositor.h"
 #include "ui/views/widget/widget.h"
@@ -33,7 +33,6 @@
 #endif
 
 #if BUILDFLAG(IS_WIN)
-#include "ui/base/win/shell.h"
 #include "ui/display/win/screen_win.h"
 #endif
 
@@ -47,7 +46,7 @@ namespace gin {
 template <>
 struct Converter<electron::NativeWindow::TitleBarStyle> {
   static bool FromV8(v8::Isolate* isolate,
-                     v8::Handle<v8::Value> val,
+                     v8::Local<v8::Value> val,
                      electron::NativeWindow::TitleBarStyle* out) {
     using TitleBarStyle = electron::NativeWindow::TitleBarStyle;
     std::string title_bar_style;
@@ -101,6 +100,11 @@ NativeWindow::NativeWindow(const gin_helper::Dictionary& options,
   options.Get(options::kTransparent, &transparent_);
   options.Get(options::kEnableLargerThanScreen, &enable_larger_than_screen_);
   options.Get(options::kTitleBarStyle, &title_bar_style_);
+#if BUILDFLAG(IS_WIN)
+  options.Get(options::kBackgroundMaterial, &background_material_);
+#elif BUILDFLAG(IS_MAC)
+  options.Get(options::kVibrancyType, &vibrancy_);
+#endif
 
   v8::Local<v8::Value> titlebar_overlay;
   if (options.Get(options::ktitleBarOverlay, &titlebar_overlay)) {
@@ -109,16 +113,12 @@ NativeWindow::NativeWindow(const gin_helper::Dictionary& options,
     } else if (titlebar_overlay->IsObject()) {
       titlebar_overlay_ = true;
 
-      gin_helper::Dictionary titlebar_overlay_dict =
-          gin::Dictionary::CreateEmpty(options.isolate());
+      auto titlebar_overlay_dict =
+          gin_helper::Dictionary::CreateEmpty(options.isolate());
       options.Get(options::ktitleBarOverlay, &titlebar_overlay_dict);
       int height;
       if (titlebar_overlay_dict.Get(options::kOverlayHeight, &height))
         titlebar_overlay_height_ = height;
-
-#if !(BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC))
-      DCHECK(false);
-#endif
     }
   }
 
@@ -254,7 +254,7 @@ void NativeWindow::InitFromOptions(const gin_helper::Dictionary& options) {
 #if BUILDFLAG(IS_MAC)
   std::string type;
   if (options.Get(options::kVibrancyType, &type)) {
-    SetVibrancy(type);
+    SetVibrancy(type, 0);
   }
 #elif BUILDFLAG(IS_WIN)
   std::string material;
@@ -290,7 +290,7 @@ void NativeWindow::SetSize(const gfx::Size& size, bool animate) {
   SetBounds(gfx::Rect(GetPosition(), size), animate);
 }
 
-gfx::Size NativeWindow::GetSize() {
+gfx::Size NativeWindow::GetSize() const {
   return GetBounds().size();
 }
 
@@ -298,7 +298,7 @@ void NativeWindow::SetPosition(const gfx::Point& position, bool animate) {
   SetBounds(gfx::Rect(position, GetSize()), animate);
 }
 
-gfx::Point NativeWindow::GetPosition() {
+gfx::Point NativeWindow::GetPosition() const {
   return GetBounds().origin();
 }
 
@@ -306,7 +306,7 @@ void NativeWindow::SetContentSize(const gfx::Size& size, bool animate) {
   SetSize(ContentBoundsToWindowBounds(gfx::Rect(size)).size(), animate);
 }
 
-gfx::Size NativeWindow::GetContentSize() {
+gfx::Size NativeWindow::GetContentSize() const {
   return GetContentBounds().size();
 }
 
@@ -314,11 +314,11 @@ void NativeWindow::SetContentBounds(const gfx::Rect& bounds, bool animate) {
   SetBounds(ContentBoundsToWindowBounds(bounds), animate);
 }
 
-gfx::Rect NativeWindow::GetContentBounds() {
+gfx::Rect NativeWindow::GetContentBounds() const {
   return WindowBoundsToContentBounds(GetBounds());
 }
 
-bool NativeWindow::IsNormal() {
+bool NativeWindow::IsNormal() const {
   return !IsMinimized() && !IsMaximized() && !IsFullscreen();
 }
 
@@ -332,7 +332,7 @@ extensions::SizeConstraints NativeWindow::GetSizeConstraints() const {
   if (size_constraints_)
     return *size_constraints_;
   if (!content_size_constraints_)
-    return extensions::SizeConstraints();
+    return {};
   // Convert content size constraints to window size constraints.
   extensions::SizeConstraints constraints;
   if (content_size_constraints_->HasMaximumSize()) {
@@ -366,7 +366,7 @@ extensions::SizeConstraints NativeWindow::GetContentSizeConstraints() const {
   if (content_size_constraints_)
     return *content_size_constraints_;
   if (!size_constraints_)
-    return extensions::SizeConstraints();
+    return {};
   // Convert window size constraints to content size constraints.
   // Note that we are not caching the results, because Chromium reccalculates
   // window frame size everytime when min/max sizes are passed, and we must
@@ -425,11 +425,11 @@ void NativeWindow::SetSheetOffset(const double offsetX, const double offsetY) {
   sheet_offset_y_ = offsetY;
 }
 
-double NativeWindow::GetSheetOffsetX() {
+double NativeWindow::GetSheetOffsetX() const {
   return sheet_offset_x_;
 }
 
-double NativeWindow::GetSheetOffsetY() {
+double NativeWindow::GetSheetOffsetY() const {
   return sheet_offset_y_;
 }
 
@@ -437,51 +437,31 @@ bool NativeWindow::IsTabletMode() const {
   return false;
 }
 
-void NativeWindow::SetRepresentedFilename(const std::string& filename) {}
-
-std::string NativeWindow::GetRepresentedFilename() {
+std::string NativeWindow::GetRepresentedFilename() const {
   return "";
 }
 
-void NativeWindow::SetDocumentEdited(bool edited) {}
-
-bool NativeWindow::IsDocumentEdited() {
+bool NativeWindow::IsDocumentEdited() const {
   return false;
 }
 
-void NativeWindow::SetFocusable(bool focusable) {}
-
-bool NativeWindow::IsFocusable() {
+bool NativeWindow::IsFocusable() const {
   return false;
 }
-
-void NativeWindow::SetMenu(ElectronMenuModel* menu) {}
 
 void NativeWindow::SetParentWindow(NativeWindow* parent) {
   parent_ = parent;
 }
 
-void NativeWindow::InvalidateShadow() {}
-
-void NativeWindow::SetAutoHideCursor(bool auto_hide) {}
-
-void NativeWindow::SelectPreviousTab() {}
-
-void NativeWindow::SelectNextTab() {}
-
-void NativeWindow::ShowAllTabs() {}
-
-void NativeWindow::MergeAllWindows() {}
-
-void NativeWindow::MoveTabToNewWindow() {}
-
-void NativeWindow::ToggleTabBar() {}
-
 bool NativeWindow::AddTabbedWindow(NativeWindow* window) {
   return true;  // for non-Mac platforms
 }
 
-void NativeWindow::SetVibrancy(const std::string& type) {
+std::optional<std::string> NativeWindow::GetTabbingIdentifier() const {
+  return "";  // for non-Mac platforms
+}
+
+void NativeWindow::SetVibrancy(const std::string& type, int duration) {
   vibrancy_ = type;
 }
 
@@ -492,29 +472,15 @@ void NativeWindow::SetBackgroundMaterial(const std::string& type) {
 void NativeWindow::SetTouchBar(
     std::vector<gin_helper::PersistentDictionary> items) {}
 
-void NativeWindow::RefreshTouchBarItem(const std::string& item_id) {}
-
 void NativeWindow::SetEscapeTouchBarItem(
     gin_helper::PersistentDictionary item) {}
 
-void NativeWindow::SetAutoHideMenuBar(bool auto_hide) {}
-
-bool NativeWindow::IsMenuBarAutoHide() {
+bool NativeWindow::IsMenuBarAutoHide() const {
   return false;
 }
 
-void NativeWindow::SetMenuBarVisibility(bool visible) {}
-
-bool NativeWindow::IsMenuBarVisible() {
+bool NativeWindow::IsMenuBarVisible() const {
   return true;
-}
-
-double NativeWindow::GetAspectRatio() {
-  return aspect_ratio_;
-}
-
-gfx::Size NativeWindow::GetAspectRatioExtraSize() {
-  return aspect_ratio_extraSize_;
 }
 
 void NativeWindow::SetAspectRatio(double aspect_ratio,
@@ -523,12 +489,7 @@ void NativeWindow::SetAspectRatio(double aspect_ratio,
   aspect_ratio_extraSize_ = extra_size;
 }
 
-void NativeWindow::PreviewFile(const std::string& path,
-                               const std::string& display_name) {}
-
-void NativeWindow::CloseFilePreview() {}
-
-gfx::Rect NativeWindow::GetWindowControlsOverlayRect() {
+std::optional<gfx::Rect> NativeWindow::GetWindowControlsOverlayRect() {
   return overlay_rect_;
 }
 
@@ -571,9 +532,17 @@ void NativeWindow::NotifyWindowClosed() {
   WindowList::RemoveWindow(this);
 }
 
-void NativeWindow::NotifyWindowEndSession() {
+void NativeWindow::NotifyWindowQueryEndSession(
+    const std::vector<std::string>& reasons,
+    bool* prevent_default) {
   for (NativeWindowObserver& observer : observers_)
-    observer.OnWindowEndSession();
+    observer.OnWindowQueryEndSession(reasons, prevent_default);
+}
+
+void NativeWindow::NotifyWindowEndSession(
+    const std::vector<std::string>& reasons) {
+  for (NativeWindowObserver& observer : observers_)
+    observer.OnWindowEndSession(reasons);
 }
 
 void NativeWindow::NotifyWindowBlur() {
@@ -656,6 +625,7 @@ void NativeWindow::NotifyWindowMoved() {
 }
 
 void NativeWindow::NotifyWindowEnterFullScreen() {
+  NotifyLayoutWindowControlsOverlay();
   for (NativeWindowObserver& observer : observers_)
     observer.OnWindowEnterFullScreen();
 }
@@ -681,6 +651,7 @@ void NativeWindow::NotifyWindowSheetEnd() {
 }
 
 void NativeWindow::NotifyWindowLeaveFullScreen() {
+  NotifyLayoutWindowControlsOverlay();
   for (NativeWindowObserver& observer : observers_)
     observer.OnWindowLeaveFullScreen();
 }
@@ -700,9 +671,10 @@ void NativeWindow::NotifyWindowAlwaysOnTopChanged() {
     observer.OnWindowAlwaysOnTopChanged();
 }
 
-void NativeWindow::NotifyWindowExecuteAppCommand(const std::string& command) {
+void NativeWindow::NotifyWindowExecuteAppCommand(
+    const std::string_view command_name) {
   for (NativeWindowObserver& observer : observers_)
-    observer.OnExecuteAppCommand(command);
+    observer.OnExecuteAppCommand(command_name);
 }
 
 void NativeWindow::NotifyTouchBarItemInteraction(const std::string& item_id,
@@ -724,10 +696,10 @@ void NativeWindow::NotifyWindowSystemContextMenu(int x,
 }
 
 void NativeWindow::NotifyLayoutWindowControlsOverlay() {
-  gfx::Rect bounding_rect = GetWindowControlsOverlayRect();
-  if (!bounding_rect.IsEmpty()) {
+  auto bounding_rect = GetWindowControlsOverlayRect();
+  if (bounding_rect.has_value()) {
     for (NativeWindowObserver& observer : observers_)
-      observer.UpdateWindowControlsOverlay(bounding_rect);
+      observer.UpdateWindowControlsOverlay(bounding_rect.value());
   }
 }
 
@@ -751,6 +723,11 @@ int NativeWindow::NonClientHitTest(const gfx::Point& point) {
       return border_hit;
   }
 #endif
+
+  // This is to disable dragging in HTML5 full screen mode.
+  // Details: https://github.com/electron/electron/issues/41002
+  if (GetWidget()->IsFullscreen())
+    return HTNOWHERE;
 
   for (auto* provider : draggable_region_providers_) {
     int hit = provider->NonClientHitTest(point);
